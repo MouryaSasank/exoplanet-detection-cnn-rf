@@ -28,8 +28,7 @@ exoplanet_detection/
 ├── evaluate.py                 # Metrics and visualizations
 ├── main.py                     # Full pipeline runner
 ├── requirements.txt            # Python dependencies
-├── README.md                   # This file
-└── PROJECT_EXPLANATION.txt     # Detailed project explanation
+└── README.md                   # This file
 ```
 
 ## 🛠️ Setup & Installation

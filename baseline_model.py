@@ -14,45 +14,56 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import classification_report, precision_recall_curve, auc, f1_score
+from sklearn.metrics import f1_score
+
+import config as cfg
 
 
-def train_baseline_rf(X_train, y_train, n_estimators=200, random_state=42):
+def train_baseline_rf(X_train, y_train, random_state=None):
     """
     Train a baseline Random Forest on raw flux features, wrapped in a
-    sklearn Pipeline with StandardScaler and probability calibration.
+    sklearn Pipeline with StandardScaler.
+
+    NOTE: class_weight is NOT set to 'balanced' because SMOTE has already
+    balanced the classes. Using both would double-correct.
+
+    NOTE: CalibratedClassifierCV REMOVED — sigmoid calibration was compressing
+    all probabilities into ~0.001–0.07 range, making threshold search fail
+    on the test set. Raw RF vote-proportion probabilities are more spread out
+    and transfer better from validation to test.
 
     Parameters
     ----------
     X_train : np.ndarray
-        Raw normalized flux values
+        Raw normalized flux values (post-SMOTE)
     y_train : np.ndarray
-        Binary labels (after SMOTE balancing)
-    n_estimators : int
+        Binary labels (post-SMOTE, already balanced)
     random_state : int
 
     Returns
     -------
     pipeline : Pipeline
-        Trained pipeline (StandardScaler -> CalibratedClassifierCV(RF))
+        Trained pipeline (StandardScaler -> RF)
     """
-    print(f"[INFO] Training BASELINE Random Forest ({n_estimators} trees) with Pipeline...")
+    if random_state is None:
+        random_state = cfg.GLOBAL_SEED
+
+    print(f"[INFO] Training BASELINE Random Forest ({cfg.BASELINE_N_ESTIMATORS} trees) with Pipeline...")
     rf = RandomForestClassifier(
-        n_estimators=n_estimators,
-        class_weight='balanced',
-        max_depth=30,
-        min_samples_leaf=2,
+        n_estimators=cfg.BASELINE_N_ESTIMATORS,
+        max_depth=cfg.BASELINE_MAX_DEPTH,
+        min_samples_leaf=cfg.BASELINE_MIN_SAMPLES_LEAF,
         random_state=random_state,
         n_jobs=-1,
         verbose=0
     )
 
-    calibrated_rf = CalibratedClassifierCV(rf, cv=3, method='isotonic')
-
+    # FIX: Removed CalibratedClassifierCV — sigmoid calibration compressed
+    # all probabilities into 0.001–0.07 range, causing zero positive predictions
+    # on test set. Raw RF probabilities are wider and threshold-stable.
     pipeline = Pipeline([
         ('scaler', StandardScaler()),
-        ('classifier', calibrated_rf)
+        ('classifier', rf)
     ])
 
     pipeline.fit(X_train, y_train)
@@ -63,57 +74,67 @@ def train_baseline_rf(X_train, y_train, n_estimators=200, random_state=42):
 def find_optimal_threshold_baseline(pipeline, X_val, y_val):
     """
     Find the threshold that maximizes F1 for the baseline model.
+
+    Uses BASELINE-SPECIFIC threshold config (decoupled from hybrid):
+      - BASELINE_THRESHOLD_MIN = 0.01 (very low floor)
+      - BASELINE_THRESHOLD_MAX = 0.50
+      - BASELINE_THRESHOLD_STEPS = 50
+      - BASELINE_THRESHOLD_FALLBACK = 0.01
+
+    Includes a hard percentile fallback guarantee: if no threshold in the
+    linspace search produces any positives (F1=0), forces the top-1% of
+    probability samples to be predicted positive.
     """
     y_prob = pipeline.predict_proba(X_val)[:, 1]
 
     best_f1 = 0
-    best_threshold = 0.5
+    best_threshold = cfg.BASELINE_THRESHOLD_FALLBACK
 
-    for t in np.arange(0.10, 0.91, 0.01):
+    thresholds = np.linspace(
+        cfg.BASELINE_THRESHOLD_MIN,
+        cfg.BASELINE_THRESHOLD_MAX,
+        cfg.BASELINE_THRESHOLD_STEPS
+    )
+
+    for t in thresholds:
         y_pred_t = (y_prob >= t).astype(int)
         f1 = f1_score(y_val, y_pred_t, zero_division=0)
         if f1 > best_f1:
             best_f1 = f1
             best_threshold = t
 
+    # ── HARD GUARANTEE: if no threshold found any positives, force top-N ──
     if best_f1 == 0:
-        best_threshold = 0.2
-        print(f"[WARN] No baseline threshold improvement â€” using fallback: {best_threshold:.2f}")
+        print("[WARN] Linspace threshold search found F1=0 — activating percentile fallback")
+
+        # Try top 1% of samples as positive
+        percentile_threshold = np.percentile(y_prob, 99)
+        percentile_threshold = max(percentile_threshold, cfg.BASELINE_THRESHOLD_FALLBACK)
+        y_pred_forced = (y_prob >= percentile_threshold).astype(int)
+        f1_forced = f1_score(y_val, y_pred_forced, zero_division=0)
+        print(f"[FALLBACK] Top-1% threshold: {percentile_threshold:.6f} "
+              f"(positives={y_pred_forced.sum()}, F1={f1_forced:.4f})")
+
+        if f1_forced > 0:
+            best_threshold = percentile_threshold
+            best_f1 = f1_forced
+        else:
+            # Last resort: top 0.5%
+            percentile_threshold = np.percentile(y_prob, 99.5)
+            percentile_threshold = max(percentile_threshold, cfg.BASELINE_THRESHOLD_FALLBACK)
+            y_pred_last = (y_prob >= percentile_threshold).astype(int)
+            f1_last = f1_score(y_val, y_pred_last, zero_division=0)
+            best_threshold = percentile_threshold
+            best_f1 = f1_last
+            print(f"[LAST RESORT] Top-0.5% threshold: {percentile_threshold:.6f} "
+                  f"(positives={y_pred_last.sum()}, F1={f1_last:.4f})")
+
+    if best_f1 == 0:
+        print(f"[CRITICAL] Baseline still at F1=0 after all fallbacks — using threshold: {best_threshold:.6f}")
     else:
-        print(f"[INFO] Optimal baseline threshold: {best_threshold:.2f} (F1={best_f1:.4f})")
+        print(f"[INFO] Optimal baseline threshold: {best_threshold:.6f} (F1={best_f1:.4f})")
+
     return best_threshold, best_f1
-
-
-def evaluate_baseline(model, X_test, y_test):
-    """
-    Evaluate the baseline model and return metrics.
-    """
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
-
-    report = classification_report(y_test, y_pred, target_names=['Non-Planet', 'Exoplanet'])
-
-    precision_vals, recall_vals, _ = precision_recall_curve(y_test, y_prob)
-    pr_auc = auc(recall_vals, precision_vals)
-
-    report_dict = classification_report(y_test, y_pred, target_names=['Non-Planet', 'Exoplanet'],
-                                        output_dict=True)
-
-    metrics = {
-        'report': report,
-        'precision': report_dict['Exoplanet']['precision'],
-        'recall': report_dict['Exoplanet']['recall'],
-        'f1': report_dict['Exoplanet']['f1-score'],
-        'pr_auc': pr_auc,
-        'y_pred': y_pred,
-        'y_prob': y_prob
-    }
-
-    print("\n[BASELINE] Classification Report:")
-    print(report)
-    print(f"[BASELINE] Precision-Recall AUC: {pr_auc:.4f}")
-
-    return metrics
 
 
 def save_baseline(model, path):

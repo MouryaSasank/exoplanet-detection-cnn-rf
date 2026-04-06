@@ -19,11 +19,11 @@ env/
 .ipynb_checkpoints/
 
 # Large data files (download from Kaggle separately)
-data/
-*.csv
+data/*.csv
 
 # Large trained model files (retrain using main.py)
 models/cnn_model.keras
+models/*.pkl
 
 # OS files
 .DS_Store

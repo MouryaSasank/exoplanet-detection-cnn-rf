@@ -1,18 +1,22 @@
 """
-preprocessing.py — Data Loading, Normalization, and SMOTE Oversampling
+preprocessing.py — Data Loading, Normalization, Denoising, and SMOTE Oversampling
 
 This module handles:
   1. Loading the Kepler exoplanet CSV dataset (train + test splits)
-  2. Normalizing each star's flux measurements (zero-mean, unit-variance)
-  3. Global feature-wise scaling (fitted on train only, applied to test)
-  4. Reshaping data for the 1D CNN input
-  5. Applying SMOTE to balance the minority class (confirmed exoplanets)
+  2. Gaussian smoothing to denoise light curves while preserving transit dips
+  3. Per-sample normalization (zero-mean, unit-variance per star)
+  4. Global feature-wise scaling (fitted on train only, applied to test)
+  5. Reshaping data for the 1D CNN input
+  6. Applying SMOTE to balance the minority class (confirmed exoplanets)
 """
 
 import numpy as np
 import pandas as pd
+from scipy.ndimage import gaussian_filter1d
 from sklearn.preprocessing import StandardScaler
 from imblearn.over_sampling import SMOTE
+
+import config as cfg
 
 
 def load_data(train_path, test_path):
@@ -58,6 +62,38 @@ def load_data(train_path, test_path):
     print(f"  Test samples:     {len(y_test)} | Exoplanets: {y_test.sum()} | Non-exoplanets: {(y_test == 0).sum()}")
 
     return X_train, X_test, y_train, y_test
+
+
+def denoise_light_curves(X, sigma=None):
+    """
+    Apply Gaussian smoothing to denoise light curves.
+
+    Gaussian smoothing removes high-frequency noise (instrument noise,
+    cosmic rays) while preserving the broader transit dip shapes that
+    the CNN needs to detect.
+
+    Parameters
+    ----------
+    X : np.ndarray of shape (n_samples, n_features)
+        Raw flux arrays
+    sigma : float
+        Standard deviation for Gaussian kernel. Higher = more smoothing.
+        Default from config.GAUSSIAN_SIGMA.
+
+    Returns
+    -------
+    X_smooth : np.ndarray
+        Smoothed flux arrays, same shape as input
+    """
+    if sigma is None:
+        sigma = cfg.GAUSSIAN_SIGMA
+
+    print(f"[INFO] Applying Gaussian smoothing (sigma={sigma}) to denoise light curves...")
+    X_smooth = np.zeros_like(X)
+    for i in range(X.shape[0]):
+        X_smooth[i] = gaussian_filter1d(X[i], sigma=sigma)
+    print("  Denoising complete.")
+    return X_smooth
 
 
 def normalize_flux(X_train, X_test):
@@ -124,7 +160,7 @@ def reshape_for_cnn(X):
     return X.reshape(X.shape[0], X.shape[1], 1)
 
 
-def apply_smote(X, y, random_state=42):
+def apply_smote(X, y, random_state=None, sampling_strategy=None):
     """
     Apply SMOTE (Synthetic Minority Over-sampling Technique) to balance classes.
 
@@ -140,16 +176,27 @@ def apply_smote(X, y, random_state=42):
         Binary labels
     random_state : int
         Seed for reproducibility
+    sampling_strategy : str or float
+        SMOTE sampling strategy
 
     Returns
     -------
     X_resampled, y_resampled : np.ndarray
         Balanced feature matrix and labels
     """
+    if random_state is None:
+        random_state = cfg.GLOBAL_SEED
+    if sampling_strategy is None:
+        sampling_strategy = cfg.SMOTE_SAMPLING_STRATEGY
+
     print("[INFO] Applying SMOTE to handle class imbalance...")
     print(f"  Before SMOTE: Class 0: {(y == 0).sum()}, Class 1: {(y == 1).sum()}")
 
-    smote = SMOTE(random_state=random_state)
+    smote = SMOTE(
+        random_state=random_state,
+        sampling_strategy=sampling_strategy,
+        k_neighbors=max(1, min(cfg.SMOTE_K_NEIGHBORS, (y == 1).sum() - 1))
+    )
     X_resampled, y_resampled = smote.fit_resample(X, y)
 
     print(f"  After  SMOTE: Class 0: {(y_resampled == 0).sum()}, Class 1: {(y_resampled == 1).sum()}")
