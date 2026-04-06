@@ -93,6 +93,62 @@ def compute_metrics(y_true, y_pred, y_prob):
     return metrics
 
 
+def bootstrap_confidence_intervals(y_true, y_prob, threshold, n_bootstrap=1000, ci=95, random_state=42):
+    """
+    Compute bootstrapped confidence intervals for F1, PR-AUC, and MCC.
+
+    With only 5 positive samples in the test set, point estimates are
+    statistically fragile. Bootstrap resampling quantifies this uncertainty
+    by resampling the test set 1000 times with replacement and computing
+    metrics on each resample.
+
+    Parameters
+    ----------
+    y_true : array-like — true labels
+    y_prob : array-like — predicted probabilities
+    threshold : float — classification threshold
+    n_bootstrap : int — number of bootstrap resamples
+    ci : float — confidence interval width (default 95%)
+    random_state : int — seed for reproducibility
+
+    Returns
+    -------
+    results : dict
+        Keys 'f1', 'pr_auc', 'mcc', each containing 'mean', 'lower', 'upper'
+    """
+    rng = np.random.RandomState(random_state)
+    f1_scores, prauc_scores, mcc_scores = [], [], []
+
+    from sklearn.metrics import f1_score, matthews_corrcoef, precision_recall_curve, auc
+
+    for _ in range(n_bootstrap):
+        indices = rng.randint(0, len(y_true), size=len(y_true))
+        y_b = np.array(y_true)[indices]
+        p_b = np.array(y_prob)[indices]
+
+        # Skip degenerate resamples (all one class)
+        if y_b.sum() == 0 or y_b.sum() == len(y_b):
+            continue
+
+        pred_b = (p_b >= threshold).astype(int)
+        f1_scores.append(f1_score(y_b, pred_b, zero_division=0))
+        mcc_scores.append(matthews_corrcoef(y_b, pred_b))
+
+        prec_v, rec_v, _ = precision_recall_curve(y_b, p_b)
+        prauc_scores.append(auc(rec_v, prec_v))
+
+    alpha = (100 - ci) / 2
+    results = {}
+    for name, scores in [('f1', f1_scores), ('pr_auc', prauc_scores), ('mcc', mcc_scores)]:
+        arr = np.array(scores)
+        results[name] = {
+            'mean': float(np.mean(arr)),
+            'lower': float(np.percentile(arr, alpha)),
+            'upper': float(np.percentile(arr, 100 - alpha))
+        }
+
+    return results
+
 def plot_confusion_matrix(y_true, y_pred, save_path, title='Confusion Matrix'):
     """Plot and save a confusion matrix as a heatmap."""
     os.makedirs(os.path.dirname(save_path), exist_ok=True)

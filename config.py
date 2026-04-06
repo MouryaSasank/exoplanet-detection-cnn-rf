@@ -67,7 +67,7 @@ BASELINE_THRESHOLD_FALLBACK = 0.01  # Last-resort fallback — will still predic
 # ─── CROSS-VALIDATION ────────────────────────────────────────
 CV_N_SPLITS = 5
 CV_RF_N_ESTIMATORS = 200
-CV_RF_MAX_DEPTH = 12
+CV_RF_MAX_DEPTH = 8  # Aligned with RF_MAX_DEPTH for consistent CV evaluation
 
 # ─── PATHS (relative to BASE_DIR) ────────────────────────────
 DATA_SUBDIR = 'data'

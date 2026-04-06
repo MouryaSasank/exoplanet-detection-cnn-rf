@@ -1,0 +1,4 @@
+Variant,Precision,Recall,F1,PR-AUC
+CNN-only (no RF),0.6667,0.4,0.5,0.3302
+PCA(64) + RF (fair baseline),0.0,0.0,0.0,0.0327
+CNN + RF Hybrid (proposed),0.6667,0.4,0.5,0.5606

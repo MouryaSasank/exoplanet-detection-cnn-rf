@@ -49,6 +49,7 @@ from hybrid_classifier import (
 from baseline_model import train_baseline_rf, find_optimal_threshold_baseline, save_baseline
 from evaluate import (
     compute_metrics,
+    bootstrap_confidence_intervals,
     plot_confusion_matrix,
     plot_precision_recall_curve,
     plot_roc_curve,
@@ -422,6 +423,80 @@ def main():
                           os.path.join(OUTPUT_DIR, 'shap_summary.png'))
     except Exception as e:
         print(f"[WARN] SHAP analysis failed: {e}")
+
+    # ──────────────────────────────────────────
+    # STEP 8c: BOOTSTRAP CONFIDENCE INTERVALS
+    # ──────────────────────────────────────────
+    print("\n[INFO] Computing bootstrap confidence intervals (n=1000)...")
+    hybrid_ci = bootstrap_confidence_intervals(y_test, hybrid_prob, hybrid_threshold)
+    baseline_ci = bootstrap_confidence_intervals(y_test, baseline_prob, baseline_threshold)
+
+    print(f"  Hybrid   F1:     {hybrid_metrics['f1']:.4f}  [95% CI: {hybrid_ci['f1']['lower']:.4f} – {hybrid_ci['f1']['upper']:.4f}]")
+    print(f"  Hybrid   PR-AUC: {hybrid_metrics['pr_auc']:.4f}  [95% CI: {hybrid_ci['pr_auc']['lower']:.4f} – {hybrid_ci['pr_auc']['upper']:.4f}]")
+    print(f"  Hybrid   MCC:    {hybrid_metrics['mcc']:.4f}  [95% CI: {hybrid_ci['mcc']['lower']:.4f} – {hybrid_ci['mcc']['upper']:.4f}]")
+    print(f"  Baseline F1:     {baseline_metrics['f1']:.4f}  [95% CI: {baseline_ci['f1']['lower']:.4f} – {baseline_ci['f1']['upper']:.4f}]")
+    print(f"  Baseline PR-AUC: {baseline_metrics['pr_auc']:.4f}  [95% CI: {baseline_ci['pr_auc']['lower']:.4f} – {baseline_ci['pr_auc']['upper']:.4f}]")
+
+    # ──────────────────────────────────────────
+    # STEP 8d: ABLATION STUDY
+    # ──────────────────────────────────────────
+    print_banner("8d", "Ablation Study")
+    from sklearn.decomposition import PCA
+    from sklearn.ensemble import RandomForestClassifier as AblRF
+    from sklearn.pipeline import Pipeline as AblPipe
+    from sklearn.preprocessing import StandardScaler as AblScaler
+
+    ablation_rows = []
+
+    # Variant 1: CNN-only (use CNN sigmoid output directly, no RF)
+    cnn_test_prob = cnn_model.predict(X_test_cnn, verbose=0).ravel()
+    cnn_only_pred = (cnn_test_prob >= cnn_threshold).astype(int)
+    from sklearn.metrics import precision_score as ps, recall_score as rs
+    from sklearn.metrics import precision_recall_curve as prc, auc as sk_auc2
+    p_c, r_c, _ = prc(y_test, cnn_test_prob)
+    ablation_rows.append({
+        'Variant': 'CNN-only (no RF)',
+        'Precision': round(ps(y_test, cnn_only_pred, zero_division=0), 4),
+        'Recall': round(rs(y_test, cnn_only_pred, zero_division=0), 4),
+        'F1': round(f1_metric(y_test, cnn_only_pred, zero_division=0), 4),
+        'PR-AUC': round(sk_auc2(r_c, p_c), 4),
+    })
+
+    # Variant 2: PCA(64) + RF on raw flux (fair dimensionality-matched baseline)
+    pca = PCA(n_components=64, random_state=cfg.GLOBAL_SEED)
+    X_tr_pca = pca.fit_transform(X_tr)
+    X_test_pca = pca.transform(X_test_norm)
+    X_tr_pca_s, y_tr_pca_s = apply_smote(X_tr_pca, y_tr, sampling_strategy=cfg.SMOTE_SAMPLING_STRATEGY)
+    pca_pipe = AblPipe([('scaler', AblScaler()), ('clf', AblRF(
+        n_estimators=cfg.RF_N_ESTIMATORS, max_depth=cfg.RF_MAX_DEPTH,
+        min_samples_leaf=cfg.RF_MIN_SAMPLES_LEAF, random_state=cfg.GLOBAL_SEED, n_jobs=-1
+    ))])
+    pca_pipe.fit(X_tr_pca_s, y_tr_pca_s)
+    pca_prob = pca_pipe.predict_proba(X_test_pca)[:, 1]
+    pca_pred = (pca_prob >= cfg.THRESHOLD_FALLBACK).astype(int)
+    p_p, r_p, _ = prc(y_test, pca_prob)
+    ablation_rows.append({
+        'Variant': 'PCA(64) + RF (fair baseline)',
+        'Precision': round(ps(y_test, pca_pred, zero_division=0), 4),
+        'Recall': round(rs(y_test, pca_pred, zero_division=0), 4),
+        'F1': round(f1_metric(y_test, pca_pred, zero_division=0), 4),
+        'PR-AUC': round(sk_auc2(r_p, p_p), 4),
+    })
+
+    # Final hybrid (already computed)
+    ablation_rows.append({
+        'Variant': 'CNN + RF Hybrid (proposed)',
+        'Precision': round(hybrid_metrics['precision'], 4),
+        'Recall': round(hybrid_metrics['recall'], 4),
+        'F1': round(hybrid_metrics['f1'], 4),
+        'PR-AUC': round(hybrid_metrics['pr_auc'], 4),
+    })
+
+    abl_df = pd.DataFrame(ablation_rows)
+    print("\n  ABLATION RESULTS:")
+    print(abl_df.to_string(index=False))
+    abl_df.to_csv(os.path.join(OUTPUT_DIR, 'ablation_table.csv'), index=False)
+    print(f"\n  Ablation table saved to: {OUTPUT_DIR}/ablation_table.csv")
 
     # ──────────────────────────────────────────
     # STEP 9: COMPARISON TABLE & HTML REPORT
