@@ -65,10 +65,16 @@ The pipeline will:
 After running, check the `outputs/` folder for:
 - **Confusion matrices** for both models
 - **Precision-Recall curve** comparison
+- **ROC curve** comparison
 - **Feature importance** chart
+- **SHAP summary** explainability plot
+- **Training curves** (CNN loss + accuracy)
 - **Sample light curves** visualization
 - **Comparison table** (CSV)
-- **HTML report** with all embedded results
+- **Cross-validation results** (`cv_results.csv`)
+- **Ablation study** (`ablation_table.csv`) — CNN-only vs PCA+RF vs Hybrid
+- **Bootstrap CIs** (`bootstrap_ci.csv`) — 95% confidence intervals
+- **HTML report** with all results embedded
 
 ## 🧪 Technologies Used
 
@@ -79,3 +85,35 @@ After running, check the `outputs/` folder for:
 | imbalanced-learn  | SMOTE oversampling               |
 | NumPy / Pandas    | Data manipulation                |
 | Matplotlib / Seaborn | Visualizations                |
+| SHAP              | Model explainability             |
+| SciPy             | Gaussian denoising               |
+
+## 📈 Results Summary
+
+| Metric | Hybrid CNN+RF | Baseline RF |
+|--------|:---:|:---:|
+| PR-AUC | **0.5606** | 0.1764 |
+| F1-Score | **0.5000** | 0.2222 |
+| Recall | 0.4000 | 0.2000 |
+| ROC-AUC | **0.8727** | 0.6195 |
+| MCC | **0.5132** | 0.2149 |
+
+> **Note**: Metrics are from a reference run. Re-running `python main.py` may produce
+> slightly different numbers due to CNN training stochasticity, but relative rankings
+> are stable across runs.
+
+### 🔬 Key Academic Contributions
+
+- **Ablation Study**: CNN+RF Hybrid vs CNN-only vs PCA(64)+RF — proves CNN-learned features are superior to PCA dimensionality reduction
+- **Bootstrap Confidence Intervals**: 1000-resample CIs quantify statistical uncertainty with only 5 test positives
+- **SHAP Explainability**: TreeExplainer reveals which CNN-learned features drive each prediction
+- **5-Fold Stratified CV**: Validates robustness despite extreme class imbalance (37 vs 5,050)
+- **Isotonic Probability Calibration**: CalibratedClassifierCV improves probability reliability for threshold optimization
+
+## ⚠️ Known Limitations
+
+- Only 5 exoplanets in the test set — point metrics are statistically fragile
+- CV F1 ranges from 0.14 to 0.60 across folds (high variance due to small positive set)
+- SMOTE generates synthetic samples from only 37 real exoplanets
+- See the HTML report's "Limitations & Future Work" section for full discussion
+

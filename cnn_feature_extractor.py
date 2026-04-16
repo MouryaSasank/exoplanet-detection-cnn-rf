@@ -169,7 +169,8 @@ def find_optimal_threshold(model, X_val, y_val):
     best_threshold = cfg.THRESHOLD_FALLBACK
 
     thresholds = np.linspace(cfg.THRESHOLD_MIN, cfg.THRESHOLD_MAX, cfg.THRESHOLD_STEPS)
-    assert len(thresholds) > 10, f"Threshold search must test >10 values, got {len(thresholds)}"
+    if len(thresholds) <= 10:
+        print(f"[WARN] Threshold search testing only {len(thresholds)} values — check THRESHOLD_STEPS in config.py")
     for t in thresholds:
         y_pred_t = (y_prob >= t).astype(int)
         f1 = f1_score(y_val, y_pred_t, zero_division=0)

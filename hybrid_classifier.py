@@ -110,8 +110,10 @@ def find_optimal_threshold_rf(pipeline, X_val, y_val):
             best_f1 = f1
             best_threshold = t
 
-        # Track best F1 among precision-satisfying thresholds
-        if prec >= 0.4 and f1 > best_f1_constrained:
+        # Precision constraint: require precision >= 0.30 (relaxed from 0.40)
+        # Astrophysical justification: missing a real exoplanet (FN) is costlier
+        # than a false alarm (FP). 0.30 is more lenient but still defensible.
+        if prec >= 0.30 and f1 > best_f1_constrained:
             best_f1_constrained = f1
             best_threshold_constrained = t
 

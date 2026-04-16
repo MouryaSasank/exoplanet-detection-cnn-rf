@@ -437,6 +437,23 @@ def main():
     print(f"  Baseline F1:     {baseline_metrics['f1']:.4f}  [95% CI: {baseline_ci['f1']['lower']:.4f} – {baseline_ci['f1']['upper']:.4f}]")
     print(f"  Baseline PR-AUC: {baseline_metrics['pr_auc']:.4f}  [95% CI: {baseline_ci['pr_auc']['lower']:.4f} – {baseline_ci['pr_auc']['upper']:.4f}]")
 
+    # Save bootstrap CIs to disk (Critical fix: was only print())
+    ci_rows = []
+    for model_name, ci_data, metrics in [('Hybrid', hybrid_ci, hybrid_metrics), ('Baseline', baseline_ci, baseline_metrics)]:
+        for metric_name in ['f1', 'pr_auc', 'mcc']:
+            ci_rows.append({
+                'Model': model_name,
+                'Metric': metric_name.upper(),
+                'Point_Estimate': round(metrics[metric_name], 4),
+                'CI_Lower': round(ci_data[metric_name]['lower'], 4),
+                'CI_Upper': round(ci_data[metric_name]['upper'], 4),
+                'CI_Mean': round(ci_data[metric_name]['mean'], 4),
+            })
+    ci_df = pd.DataFrame(ci_rows)
+    ci_csv_path = os.path.join(OUTPUT_DIR, 'bootstrap_ci.csv')
+    ci_df.to_csv(ci_csv_path, index=False)
+    print(f"  [INFO] Bootstrap CIs saved to: {ci_csv_path}")
+
     # ──────────────────────────────────────────
     # STEP 8d: ABLATION STUDY
     # ──────────────────────────────────────────
@@ -508,7 +525,9 @@ def main():
 
     html_path = generate_html_report(
         baseline_metrics, hybrid_metrics, OUTPUT_DIR,
-        cv_results_path=cv_csv_path
+        cv_results_path=cv_csv_path,
+        ablation_csv_path=os.path.join(OUTPUT_DIR, 'ablation_table.csv'),
+        bootstrap_ci_path=os.path.join(OUTPUT_DIR, 'bootstrap_ci.csv')
     )
 
     abs_html = os.path.abspath(html_path)

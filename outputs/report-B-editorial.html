@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNN+RF Exoplanet Classification — Results Dashboard</title>
+    <meta name="description" content="CNN-Based Feature Learning Combined with Random Forest for Robust Exoplanet Classification Using NASA Kepler Light Curves.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500;1,9..144,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary:    #111218;
+            --bg-elevated:   #181A22;
+            --text-primary:  rgba(255, 255, 255, 0.88);
+            --text-secondary: rgba(255, 255, 255, 0.45);
+            --text-dim:      rgba(255, 255, 255, 0.25);
+            --accent:        #FF6B35;
+            --border:        rgba(255, 255, 255, 0.08);
+            --row-alt:       rgba(255, 255, 255, 0.03);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        /* ─── NAV ─── */
+        .nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(17, 18, 24, 0.94);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 0;
+        }
+
+        .nav-inner {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 0 2.5rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.8rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--accent);
+        }
+
+        /* ─── HEADER ─── */
+        .header {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 90px 2.5rem 64px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-meta {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            margin-bottom: 1.2rem;
+        }
+
+        .header-meta span {
+            color: var(--accent);
+        }
+
+        .header h1 {
+            font-family: 'Fraunces', serif;
+            font-weight: 600;
+            font-style: italic;
+            font-size: 2.8rem;
+            font-variation-settings: 'opsz' 144;
+            letter-spacing: -0.01em;
+            line-height: 1.12;
+            color: var(--text-primary);
+            position: relative;
+            display: inline-block;
+        }
+
+        .header h1::after {
+            content: '';
+            display: block;
+            width: 100%;
+            height: 2px;
+            background: var(--accent);
+            margin-top: 0.5rem;
+            opacity: 0.7;
+        }
+
+        .header .subtitle {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-top: 1.2rem;
+            font-weight: 400;
+            max-width: 600px;
+        }
+
+        /* ─── CONTENT ─── */
+        .content {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 0 2.5rem;
+        }
+
+        /* ─── SECTIONS ─── */
+        .section {
+            padding: 60px 0 52px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 1.8rem;
+            position: relative;
+        }
+
+        .section-head::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+            margin-left: 1rem;
+        }
+
+        .section-num {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .section-title {
+            font-family: 'Fraunces', serif;
+            font-weight: 500;
+            font-style: italic;
+            font-size: 1.6rem;
+            font-variation-settings: 'opsz' 72;
+            color: var(--text-primary);
+            flex-shrink: 0;
+        }
+
+        /* ─── PROSE ─── */
+        .prose {
+            color: var(--text-secondary);
+            max-width: 680px;
+            font-weight: 400;
+        }
+
+        /* ─── PIPELINE SVG ─── */
+        .pipeline-wrap {
+            overflow-x: auto;
+            margin: 1.8rem 0 0;
+        }
+
+        .pipeline-wrap svg {
+            display: block;
+            margin: 0 auto;
+        }
+
+        .pipeline-wrap svg text {
+            font-family: 'IBM Plex Mono', monospace;
+            fill: var(--text-secondary);
+        }
+
+        .pipeline-wrap svg .label-main {
+            font-size: 10px;
+            fill: var(--text-primary);
+        }
+
+        .pipeline-wrap svg .label-sub {
+            font-size: 8.5px;
+            fill: var(--text-dim);
+        }
+
+        /* ─── TABLES ─── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.5rem;
+        }
+
+        th {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-dim);
+            text-align: right;
+            padding: 0 14px 12px;
+        }
+
+        th:first-child {
+            text-align: left;
+        }
+
+        td {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 0.88rem;
+            font-feature-settings: 'tnum';
+            color: var(--text-dim);
+            text-align: right;
+            padding: 10px 14px;
+        }
+
+        td:first-child {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.88rem;
+            text-align: left;
+            color: var(--text-secondary);
+        }
+
+        /* alt row tinting */
+        tbody tr:nth-child(even) td {
+            background: var(--row-alt);
+        }
+
+        /* highlighted winner */
+        .win {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        /* delta column */
+        .delta {
+            color: var(--text-dim);
+            font-size: 0.78rem;
+        }
+
+        .delta.up {
+            color: rgba(255, 107, 53, 0.55);
+        }
+
+        .delta.down {
+            color: rgba(120, 140, 255, 0.4);
+        }
+
+        /* proposed / hybrid row — orange left border only */
+        tr.proposed {
+            position: relative;
+        }
+
+        tr.proposed td:first-child {
+            border-left: 3px solid var(--accent);
+            padding-left: 11px;
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        tr.proposed td {
+            color: var(--accent);
+        }
+
+        /* ─── FIGURES ─── */
+        .figures {
+            display: grid;
+            gap: 2rem;
+            margin-top: 1.8rem;
+        }
+
+        .figures.two-col {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .figures.one-col {
+            grid-template-columns: 1fr;
+            max-width: 640px;
+        }
+
+        .fig {
+            padding-top: 0;
+        }
+
+        .fig img {
+            width: 100%;
+            display: block;
+            border-radius: 3px;
+        }
+
+        .fig-cap {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-top: 0.7rem;
+            font-weight: 300;
+        }
+
+        /* ─── FOOTNOTE ─── */
+        .footnote {
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 300;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 1.2rem;
+        }
+
+        /* ─── TWO COLUMN FOR PIPELINE ─── */
+        .two-col-text {
+            display: grid;
+            grid-template-columns: 1fr 1px 1fr;
+            gap: 0;
+            margin-top: 2rem;
+        }
+
+        .col-divider {
+            background: var(--border);
+            width: 1px;
+        }
+
+        .col-block {
+            padding: 0 2rem;
+        }
+
+        .col-block:first-child {
+            padding-left: 0;
+        }
+
+        .col-block:last-child {
+            padding-right: 0;
+        }
+
+        .col-label {
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            margin-bottom: 0.6rem;
+        }
+
+        .col-body {
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            line-height: 1.65;
+        }
+
+        /* ─── MEAN ROW ─── */
+        tr.mean-row td {
+            border-top: 1px solid var(--border);
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        /* ─── SECTION SCROLL ANIMATION ─── */
+        .section {
+            opacity: 0;
+            transform: translateY(18px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+
+        .section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ─── PRINT ─── */
+        @media print {
+            body {
+                background: #fff;
+                color: #111;
+            }
+            .nav { display: none; }
+            .header h1::after { background: #cc5522; }
+            .win, tr.proposed td { color: #cc5522; }
+            td, th { color: #333; }
+            .section { opacity: 1; transform: none; break-inside: avoid; }
+        }
+
+        /* ─── RESPONSIVE ─── */
+        @media (max-width: 768px) {
+            .header { padding: 52px 1.5rem 40px; }
+            .content { padding: 0 1.5rem; }
+            .nav-inner { padding: 0 1.5rem; }
+            .nav-links { gap: 1rem; flex-wrap: wrap; }
+            .two-col-text { grid-template-columns: 1fr; }
+            .col-divider { display: none; }
+            .col-block { padding: 0; margin-bottom: 1.5rem; }
+            .figures.two-col { grid-template-columns: 1fr; }
+            .header h1 { font-size: 2rem; }
+            table { font-size: 0.78rem; }
+            th, td { padding: 6px 8px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <ul class="nav-links">
+            <li><a href="#abstract">Abstract</a></li>
+            <li><a href="#pipeline">Pipeline</a></li>
+            <li><a href="#comparison">Results</a></li>
+            <li><a href="#ablation">Ablation</a></li>
+            <li><a href="#crossval">Cross-Val</a></li>
+            <li><a href="#visuals">Figures</a></li>
+            <li><a href="#limitations">Limitations</a></li>
+        </ul>
+    </div>
+</nav>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-meta">A Mourya Sasank · <span>CSE — URCE</span></div>
+    <h1>
+        CNN-Based Feature Learning<br>Combined with Random Forest
+    </h1>
+    <p class="subtitle">
+        Robust Exoplanet Classification Using NASA Kepler Light Curves
+    </p>
+</header>
+
+<main class="content">
+
+    <!-- 01 ABSTRACT -->
+    <section class="section" id="abstract">
+        <div class="section-head">
+            <span class="section-num">01</span>
+            <h2 class="section-title">Abstract</h2>
+        </div>
+        <p class="prose">
+            A hybrid framework in which a 1D Convolutional Neural Network performs automatic feature learning directly from raw Kepler flux time-series (~3,198 measurements per observation), eliminating manual feature design. Extracted deep representations are transferred to a Random Forest classifier, combining temporal pattern recognition with ensemble robustness and interpretability. SMOTE is applied post train-validation split to address class imbalance without data leakage, evaluated using PR-AUC and F1-Score — metrics chosen for severely imbalanced astronomical classification.
+        </p>
+    </section>
+
+    <!-- 02 PIPELINE -->
+    <section class="section" id="pipeline">
+        <div class="section-head">
+            <span class="section-num">02</span>
+            <h2 class="section-title">Pipeline Overview</h2>
+        </div>
+
+        <div class="pipeline-wrap">
+            <svg width="820" height="80" viewBox="0 0 820 80" xmlns="http://www.w3.org/2000/svg">
+                <!-- Box 1: Kepler Light Curves -->
+                <rect x="0" y="12" width="140" height="52" rx="3" fill="none" stroke="rgba(255,107,53,0.35)" stroke-width="1"/>
+                <text x="70" y="34" text-anchor="middle" class="label-main">Kepler Light Curves</text>
+                <text x="70" y="48" text-anchor="middle" class="label-sub">(~3198 points)</text>
+
+                <!-- Arrow 1 -->
+                <line x1="144" y1="38" x2="172" y2="38" stroke="rgba(255,107,53,0.3)" stroke-width="1"/>
+                <polygon points="172,34 180,38 172,42" fill="rgba(255,107,53,0.3)"/>
+
+                <!-- Box 2: 1D CNN -->
+                <rect x="184" y="12" width="130" height="52" rx="3" fill="none" stroke="rgba(255,107,53,0.35)" stroke-width="1"/>
+                <text x="249" y="34" text-anchor="middle" class="label-main">1D CNN</text>
+                <text x="249" y="48" text-anchor="middle" class="label-sub">Feature Extractor</text>
+
+                <!-- Arrow 2 -->
+                <line x1="318" y1="38" x2="346" y2="38" stroke="rgba(255,107,53,0.3)" stroke-width="1"/>
+                <polygon points="346,34 354,38 346,42" fill="rgba(255,107,53,0.3)"/>
+
+                <!-- Box 3: Deep Features -->
+                <rect x="358" y="12" width="120" height="52" rx="3" fill="none" stroke="rgba(255,107,53,0.35)" stroke-width="1"/>
+                <text x="418" y="34" text-anchor="middle" class="label-main">Deep Features</text>
+                <text x="418" y="48" text-anchor="middle" class="label-sub">(64-dim)</text>
+
+                <!-- Arrow 3 -->
+                <line x1="482" y1="38" x2="510" y2="38" stroke="rgba(255,107,53,0.3)" stroke-width="1"/>
+                <polygon points="510,34 518,38 510,42" fill="rgba(255,107,53,0.3)"/>
+
+                <!-- Box 4: Random Forest -->
+                <rect x="522" y="12" width="140" height="52" rx="3" fill="none" stroke="rgba(255,107,53,0.35)" stroke-width="1"/>
+                <text x="592" y="34" text-anchor="middle" class="label-main">Random Forest</text>
+                <text x="592" y="48" text-anchor="middle" class="label-sub">+ SMOTE</text>
+
+                <!-- Arrow 4 -->
+                <line x1="666" y1="38" x2="694" y2="38" stroke="rgba(255,107,53,0.3)" stroke-width="1"/>
+                <polygon points="694,34 702,38 694,42" fill="rgba(255,107,53,0.3)"/>
+
+                <!-- Box 5: Output -->
+                <rect x="706" y="12" width="110" height="52" rx="3" fill="none" stroke="rgba(255,107,53,0.35)" stroke-width="1"/>
+                <text x="761" y="34" text-anchor="middle" class="label-main">Exoplanet /</text>
+                <text x="761" y="48" text-anchor="middle" class="label-main">Non-Planet</text>
+            </svg>
+        </div>
+
+        <div class="two-col-text">
+            <div class="col-block">
+                <div class="col-label">CNN Architecture</div>
+                <div class="col-body">
+                    Three 1D convolutional blocks (32→64→128 filters, kernel=5) with batch normalization, ReLU activation, and max pooling. Global average pooling produces a 64-dimensional feature vector per light curve. Dropout (0.4) for regularization. Trained with early stopping on validation loss.
+                </div>
+            </div>
+            <div class="col-divider"></div>
+            <div class="col-block">
+                <div class="col-label">Random Forest Classifier</div>
+                <div class="col-body">
+                    200-tree ensemble on CNN-extracted features. SMOTE applied post-split to training fold only, preventing data leakage. Threshold optimized on validation PR curve to maximize F1. Feature importances analyzed via permutation importance and SHAP values.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 03 MODEL COMPARISON -->
+    <section class="section" id="comparison">
+        <div class="section-head">
+            <span class="section-num">03</span>
+            <h2 class="section-title">Results: Model Comparison</h2>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Baseline RF</th>
+                    <th>Hybrid CNN+RF</th>
+                    <th>Δ</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Precision</td>
+                    <td>0.2000</td>
+                    <td class="win">0.6000</td>
+                    <td class="delta up">↑ 3×</td>
+                </tr>
+                <tr>
+                    <td>Recall</td>
+                    <td>0.2000</td>
+                    <td class="win">0.6000</td>
+                    <td class="delta up">↑ 3×</td>
+                </tr>
+                <tr>
+                    <td>F1-Score</td>
+                    <td>0.2000</td>
+                    <td class="win">0.6000</td>
+                    <td class="delta up">↑ 3×</td>
+                </tr>
+                <tr>
+                    <td>PR-AUC</td>
+                    <td>0.1011</td>
+                    <td class="win">0.5425</td>
+                    <td class="delta up">↑ 5.4×</td>
+                </tr>
+                <tr>
+                    <td>ROC-AUC</td>
+                    <td class="win">0.9437</td>
+                    <td>0.8782</td>
+                    <td class="delta down">↓ 0.93×</td>
+                </tr>
+                <tr>
+                    <td>MCC</td>
+                    <td>0.1929</td>
+                    <td class="win">0.5965</td>
+                    <td class="delta up">↑ 3.1×</td>
+                </tr>
+                <tr>
+                    <td>Accuracy</td>
+                    <td>0.9860</td>
+                    <td class="win">0.9930</td>
+                    <td class="delta up">↑ 1.0×</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- 04 ABLATION -->
+    <section class="section" id="ablation">
+        <div class="section-head">
+            <span class="section-num">04</span>
+            <h2 class="section-title">Results: Ablation Study</h2>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Variant</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                    <th>PR-AUC</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>CNN-only (no RF)</td>
+                    <td>0.6667</td>
+                    <td>0.4000</td>
+                    <td>0.5000</td>
+                    <td>0.3302</td>
+                </tr>
+                <tr>
+                    <td>PCA(64) + RF (fair baseline)</td>
+                    <td>0.0000</td>
+                    <td>0.0000</td>
+                    <td>0.0000</td>
+                    <td>0.0497</td>
+                </tr>
+                <tr class="proposed">
+                    <td>CNN + RF Hybrid (proposed)</td>
+                    <td>0.6000</td>
+                    <td>0.6000</td>
+                    <td>0.6000</td>
+                    <td>0.5425</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p class="footnote">
+            Bootstrap 95% CI (1000 resamples, n=5 test positives): Hybrid F1 = 0.60 [0.00, 1.00], PR-AUC = 0.54 [0.02, 1.00], MCC = 0.60 [−0.003, 1.00]. Wide intervals reflect the statistical fragility of 5 test positives.
+        </p>
+    </section>
+
+    <!-- 05 CROSS-VALIDATION -->
+    <section class="section" id="crossval">
+        <div class="section-head">
+            <span class="section-num">05</span>
+            <h2 class="section-title">Cross-Validation Stability</h2>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Fold</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                    <th>PR-AUC</th>
+                    <th>ROC-AUC</th>
+                    <th>MCC</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>0.1818</td>
+                    <td>0.6667</td>
+                    <td>0.2857</td>
+                    <td>0.1028</td>
+                    <td>0.8784</td>
+                    <td>0.3404</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>0.1250</td>
+                    <td>0.3333</td>
+                    <td>0.1818</td>
+                    <td>0.0515</td>
+                    <td>0.8457</td>
+                    <td>0.1953</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>0.2857</td>
+                    <td>0.8571</td>
+                    <td>0.4286</td>
+                    <td>0.2114</td>
+                    <td>0.9862</td>
+                    <td>0.4888</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>0.3750</td>
+                    <td>0.5000</td>
+                    <td>0.4286</td>
+                    <td>0.3591</td>
+                    <td>0.9854</td>
+                    <td>0.4285</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>0.5000</td>
+                    <td>0.6667</td>
+                    <td>0.5714</td>
+                    <td>0.5273</td>
+                    <td>0.9839</td>
+                    <td>0.5740</td>
+                </tr>
+                <tr class="mean-row">
+                    <td>Mean ± Std</td>
+                    <td>0.2935 ± 0.15</td>
+                    <td>0.6048 ± 0.20</td>
+                    <td>0.3792 ± 0.15</td>
+                    <td>0.2504 ± 0.19</td>
+                    <td>0.9359 ± 0.07</td>
+                    <td>0.4054 ± 0.15</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- 06 VISUALIZATIONS -->
+    <section class="section" id="visuals">
+        <div class="section-head">
+            <span class="section-num">06</span>
+            <h2 class="section-title">Visualizations</h2>
+        </div>
+
+        <div class="figures two-col">
+            <div class="fig">
+                <img src="confusion_matrix_baseline.png" alt="Baseline RF confusion matrix">
+                <div class="fig-cap">Fig 1 — Confusion matrix: Baseline RF</div>
+            </div>
+            <div class="fig">
+                <img src="confusion_matrix_hybrid.png" alt="Hybrid CNN+RF confusion matrix">
+                <div class="fig-cap">Fig 2 — Confusion matrix: Hybrid CNN+RF</div>
+            </div>
+        </div>
+
+        <div class="figures one-col" style="margin-top: 2.5rem;">
+            <div class="fig">
+                <img src="pr_curve.png" alt="Precision-Recall curve comparing Hybrid vs Baseline">
+                <div class="fig-cap">Fig 3 — Precision-Recall curve. PR-AUC is the preferred metric for imbalanced classification.</div>
+            </div>
+        </div>
+
+        <div class="figures one-col" style="margin-top: 2.5rem;">
+            <div class="fig">
+                <img src="sample_light_curves.png" alt="Sample Kepler light curves showing transit events">
+                <div class="fig-cap">Fig 4 — Sample light curves. Top: confirmed exoplanets (transit dips). Bottom: non-planets.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 07 LIMITATIONS -->
+    <section class="section" id="limitations">
+        <div class="section-head">
+            <span class="section-num">07</span>
+            <h2 class="section-title">Limitations</h2>
+        </div>
+        <p class="prose">
+            The Kepler dataset contains only 37 confirmed exoplanet observations (5 in the test set), making point metrics statistically fragile — bootstrap confidence intervals span nearly the full [0, 1] range. Cross-validation F1 varies from 0.18 to 0.57 across folds, reflecting high sensitivity to which few positives appear in each split. SMOTE-generated synthetic training samples may not capture the full diversity of real transit morphologies. The pipeline has been validated exclusively on Kepler photometry and has not been tested on TESS, K2, or ground-based survey data. These constraints are inherent to the dataset scale, not the architecture, and would be mitigated by a larger confirmed exoplanet pool.
+        </p>
+    </section>
+
+</main>
+
+<!-- Section scroll reveal + nav highlight -->
+<script>
+    (function() {
+        const sections = document.querySelectorAll('.section');
+        const links = document.querySelectorAll('.nav-links a');
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                // reveal animation
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+                // nav highlight
+                if (entry.isIntersecting && entry.target.id) {
+                    links.forEach(a => a.classList.remove('active'));
+                    const active = document.querySelector('.nav-links a[href="#' + entry.target.id + '"]');
+                    if (active) active.classList.add('active');
+                }
+            });
+        }, { threshold: 0.15, rootMargin: '-60px 0px -30% 0px' });
+
+        sections.forEach(s => observer.observe(s));
+    })();
+</script>
+</body>
+</html>

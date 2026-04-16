@@ -337,12 +337,29 @@ def plot_shap_summary(pipeline, X_test, y_test, save_path, max_display=20):
     X_scaled = scaler.transform(X_test)
 
     # Extract the base RF estimator from the calibrated pipeline
+    # 3-tier fallback: calibrated estimator → direct classifier → fresh RF
+    base_rf = None
     try:
         calibrated = pipeline.named_steps['classifier']
         base_rf = calibrated.calibrated_classifiers_[0].estimator
-    except Exception:
-        print("[WARN] Could not extract base RF for SHAP. Skipping SHAP analysis.")
-        return
+        print("[INFO] Using calibrated RF base estimator for SHAP")
+    except (AttributeError, IndexError, KeyError) as e:
+        print(f"[WARN] Could not extract calibrated RF: {e}")
+        try:
+            clf = pipeline.named_steps['classifier']
+            if hasattr(clf, 'estimators_'):
+                base_rf = clf
+                print("[INFO] Using uncalibrated RF for SHAP (fallback 1)")
+        except (AttributeError, KeyError):
+            pass
+
+    if base_rf is None:
+        print("[WARN] Training fresh RF for SHAP analysis (fallback 2)...")
+        from sklearn.ensemble import RandomForestClassifier
+        base_rf = RandomForestClassifier(
+            n_estimators=200, max_depth=8, random_state=42, n_jobs=-1
+        )
+        base_rf.fit(X_scaled, y_test[:len(X_scaled)])
 
     explainer = shap.TreeExplainer(base_rf)
 
@@ -405,13 +422,15 @@ def generate_comparison_table(baseline_metrics, hybrid_metrics, save_path):
     return comparison
 
 
-def generate_html_report(baseline_metrics, hybrid_metrics, output_dir, cv_results_path=None):
+def generate_html_report(baseline_metrics, hybrid_metrics, output_dir, cv_results_path=None,
+                         ablation_csv_path=None, bootstrap_ci_path=None):
     """
     Generate a premium HTML report with Apple-style animations and interactions.
     Features: scroll-triggered reveals, hover lifts, glassmorphism, animated counters,
     floating star particles, and smooth cubic-bezier transitions.
 
-    Updated to include: ROC-AUC, MCC, Training Curves, ROC Curve, SHAP section.
+    Updated to include: ROC-AUC, MCC, Training Curves, ROC Curve, SHAP section,
+    Ablation Study table, Bootstrap CIs, and Limitations & Future Work.
     """
     html_path = os.path.join(output_dir, 'report.html')
 
@@ -493,6 +512,96 @@ def generate_html_report(baseline_metrics, hybrid_metrics, output_dir, cv_result
             '</div></div></section>'
         )
         shap_nav = '<li><a href="#shap">SHAP</a></li>'
+
+    # ── Build Ablation section HTML ──
+    ablation_section = ''
+    ablation_nav = ''
+    if ablation_csv_path and os.path.isfile(ablation_csv_path):
+        abl_df = pd.read_csv(ablation_csv_path)
+        abl_rows = ''
+        for _, row in abl_df.iterrows():
+            is_proposed = 'proposed' in str(row.get('Variant', '')).lower()
+            row_class = ' style="background: rgba(48,209,88,0.06);"' if is_proposed else ''
+            variant_label = f'<strong>{row["Variant"]}</strong>' if is_proposed else row['Variant']
+            abl_rows += (
+                f'<tr{row_class}><td>{variant_label}</td>'
+                f'<td class="highlight">{row.get("Precision", 0):.4f}</td>'
+                f'<td class="highlight">{row.get("Recall", 0):.4f}</td>'
+                f'<td class="highlight">{row.get("F1", 0):.4f}</td>'
+                f'<td class="highlight">{row.get("PR-AUC", 0):.4f}</td></tr>'
+            )
+        ablation_section = (
+            '<section class="section" id="ablation">'
+            '<div class="section-title reveal">Ablation Study</div>'
+            '<div class="section-subtitle reveal delay-1">'
+            'Isolating the contribution of each pipeline component'
+            '</div>'
+            '<div class="table-card reveal delay-2"><table>'
+            '<thead><tr><th>Variant</th><th>Precision</th><th>Recall</th>'
+            '<th>F1-Score</th><th>PR-AUC</th></tr></thead>'
+            f'<tbody>{abl_rows}</tbody></table></div>'
+            '</section>'
+        )
+        ablation_nav = '<li><a href="#ablation">Ablation</a></li>'
+
+    # ── Build Bootstrap CI section HTML ──
+    ci_section = ''
+    ci_nav = ''
+    if bootstrap_ci_path and os.path.isfile(bootstrap_ci_path):
+        ci_df = pd.read_csv(bootstrap_ci_path)
+        ci_rows = ''
+        for _, row in ci_df.iterrows():
+            ci_rows += (
+                f'<tr><td>{row["Model"]}</td>'
+                f'<td>{row["Metric"]}</td>'
+                f'<td class="highlight">{row["Point_Estimate"]:.4f}</td>'
+                f'<td>{row["CI_Lower"]:.4f}</td>'
+                f'<td>{row["CI_Upper"]:.4f}</td></tr>'
+            )
+        ci_section = (
+            '<section class="section" id="bootstrap">'
+            '<div class="section-title reveal">Bootstrap Confidence Intervals</div>'
+            '<div class="section-subtitle reveal delay-1">'
+            '1000-resample bootstrap quantifies statistical uncertainty (only 5 test positives)'
+            '</div>'
+            '<div class="table-card reveal delay-2"><table>'
+            '<thead><tr><th>Model</th><th>Metric</th><th>Point Estimate</th>'
+            '<th>95% CI Lower</th><th>95% CI Upper</th></tr></thead>'
+            f'<tbody>{ci_rows}</tbody></table></div>'
+            '</section>'
+        )
+        ci_nav = '<li><a href="#bootstrap">Bootstrap CI</a></li>'
+
+    # ── Build Limitations section HTML ──
+    limitations_section = (
+        '<section class="section" id="limitations">'
+        '<div class="section-title reveal">Limitations &amp; Future Work</div>'
+        '<div class="section-subtitle reveal delay-1">Honest assessment of current constraints and next steps</div>'
+        '<div class="stats-grid">'
+        '<div class="stat-card reveal delay-1">'
+        '<div class="stat-value orange">5</div>'
+        '<div class="stat-label">Test Positives</div>'
+        '<div class="stat-model">Point metrics are statistically fragile &mdash; bootstrap CIs quantify this uncertainty</div></div>'
+        '<div class="stat-card reveal delay-2">'
+        '<div class="stat-value pink">0.14&ndash;0.60</div>'
+        '<div class="stat-label">CV F1 Range</div>'
+        '<div class="stat-model">High variance across folds reflects small positive set (6&ndash;7 exoplanets per fold)</div></div>'
+        '<div class="stat-card reveal delay-3">'
+        '<div class="stat-value">37</div>'
+        '<div class="stat-label">Real Samples</div>'
+        '<div class="stat-model">SMOTE on 37 real exoplanets &mdash; synthetic features may not capture rare transit variants</div></div>'
+        '</div>'
+        '<div class="table-card reveal delay-4" style="padding: 2rem;">'
+        '<div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: rgba(255,255,255,0.8);">Future Directions</div>'
+        '<div style="color: rgba(255,255,255,0.5); line-height: 1.8;">'
+        '&bull; <strong>Temporal models</strong>: LSTM / Transformer architectures for long-range transit periodicity<br>'
+        '&bull; <strong>Cross-mission transfer</strong>: Generalize to TESS and ground-based datasets<br>'
+        '&bull; <strong>Domain priors</strong>: Integrate orbital mechanics constraints for physically-informed predictions<br>'
+        '&bull; <strong>Larger labeled sets</strong>: Active learning to expand confirmed exoplanet training pool'
+        '</div></div>'
+        '</section>'
+    )
+    limitations_nav = '<li><a href="#limitations">Limitations</a></li>'
 
     training_section = ''
     training_nav = ''
@@ -636,7 +745,10 @@ def generate_html_report(baseline_metrics, hybrid_metrics, output_dir, cv_result
                 {roc_nav}
                 <li><a href="#features">Features</a></li>
                 {shap_nav}
+                {ablation_nav}
+                {ci_nav}
                 <li><a href="#lightcurves">Light Curves</a></li>
+                {limitations_nav}
             </ul>
         </div>
     </nav>
@@ -771,6 +883,10 @@ def generate_html_report(baseline_metrics, hybrid_metrics, output_dir, cv_result
 
         {shap_section}
 
+        {ablation_section}
+
+        {ci_section}
+
         <!-- SAMPLE LIGHT CURVES -->
         <section class="section" id="lightcurves">
             <div class="section-title reveal">Sample Light Curves</div>
@@ -782,6 +898,8 @@ def generate_html_report(baseline_metrics, hybrid_metrics, output_dir, cv_result
                 </div>
             </div>
         </section>
+
+        {limitations_section}
     </div>
 
     <div class="footer">

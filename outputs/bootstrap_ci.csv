@@ -1,0 +1,7 @@
+Model,Metric,Point_Estimate,CI_Lower,CI_Upper,CI_Mean
+Hybrid,F1,0.6,0.0,1.0,0.5725
+Hybrid,PR_AUC,0.5425,0.0189,1.0,0.5368
+Hybrid,MCC,0.5965,-0.003,1.0,0.5821
+Baseline,F1,0.2,0.0,0.5,0.1868
+Baseline,PR_AUC,0.1011,0.019,0.2863,0.1173
+Baseline,MCC,0.1929,-0.0105,0.5399,0.1878

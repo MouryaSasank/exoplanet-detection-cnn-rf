@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CNN+RF Exoplanet Classification — Results Dashboard</title>
+    <meta name="description" content="CNN-Based Feature Learning Combined with Random Forest for Robust Exoplanet Classification Using NASA Kepler Light Curves.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Epilogue:ital,wght@0,300;0,400;0,500;1,300&family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary:    #0A0A0C;
+            --bg-elevated:   #111114;
+            --text-primary:  rgba(255, 255, 255, 0.90);
+            --text-secondary: rgba(255, 255, 255, 0.45);
+            --text-dim:      rgba(255, 255, 255, 0.25);
+            --accent:        #4AFFDB;
+            --border:        rgba(255, 255, 255, 0.08);
+            --border-faint:  rgba(255, 255, 255, 0.04);
+            --grid-line:     rgba(255, 255, 255, 0.04);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Epilogue', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            /* graph-paper background */
+            background-image:
+                linear-gradient(var(--grid-line) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* ─── NAV ─── */
+        .nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10, 10, 12, 0.92);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 0;
+        }
+
+        .nav-inner {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 2.5rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.8rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--accent);
+        }
+
+        /* ─── HEADER ─── */
+        .header {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 80px 2.5rem 60px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            opacity: 0;
+            animation: fadeIn 0.6s 0.1s forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .header-tag {
+            position: absolute;
+            top: 80px;
+            right: 2.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+        }
+
+        .header-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            color: var(--accent);
+            letter-spacing: 0.06em;
+            margin-bottom: 1rem;
+        }
+
+        .header h1 {
+            font-family: 'Syne', sans-serif;
+            font-weight: 500;
+            font-size: 2.4rem;
+            letter-spacing: -0.02em;
+            line-height: 1.15;
+            color: var(--text-primary);
+        }
+
+        .header h1 span {
+            display: block;
+            font-size: 1.3rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            margin-top: 0.3rem;
+        }
+
+        /* ─── CONTENT ─── */
+        .content {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 2.5rem;
+        }
+
+        /* ─── SECTIONS ─── */
+        .section {
+            padding: 56px 0 48px;
+            border-bottom: 1px solid var(--border-faint);
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-head {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            letter-spacing: 0.04em;
+            flex-shrink: 0;
+            padding-top: 0.15rem;
+        }
+
+        .section-title {
+            font-family: 'Syne', sans-serif;
+            font-weight: 500;
+            font-size: 1.4rem;
+            letter-spacing: 0.02em;
+            color: var(--text-primary);
+        }
+
+        /* ─── PROSE ─── */
+        .prose {
+            color: var(--text-secondary);
+            max-width: 680px;
+            font-weight: 400;
+        }
+
+        /* ─── PIPELINE SVG ─── */
+        .pipeline-wrap {
+            overflow-x: auto;
+            margin: 1.5rem 0 0;
+        }
+
+        .pipeline-wrap svg {
+            display: block;
+            margin: 0 auto;
+        }
+
+        .pipeline-wrap svg text {
+            font-family: 'JetBrains Mono', monospace;
+            fill: var(--text-secondary);
+        }
+
+        .pipeline-wrap svg .label-main {
+            font-size: 10px;
+            fill: var(--text-primary);
+        }
+
+        .pipeline-wrap svg .label-sub {
+            font-size: 8.5px;
+            fill: var(--text-dim);
+        }
+
+        /* ─── TABLES ─── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.5rem;
+        }
+
+        th {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-dim);
+            text-align: right;
+            padding: 0 12px 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        th:first-child {
+            text-align: left;
+        }
+
+        td {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.88rem;
+            font-feature-settings: 'tnum';
+            color: var(--text-dim);
+            text-align: right;
+            padding: 9px 12px;
+        }
+
+        td:first-child {
+            font-family: 'Epilogue', sans-serif;
+            font-size: 0.88rem;
+            text-align: left;
+            color: var(--text-secondary);
+        }
+
+        /* winning values in teal */
+        .win {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        /* delta column */
+        .delta {
+            color: var(--text-dim);
+            font-size: 0.78rem;
+        }
+
+        .delta.up {
+            color: rgba(74, 255, 219, 0.5);
+        }
+
+        .delta.down {
+            color: rgba(255, 120, 100, 0.4);
+        }
+
+        /* highlighted row */
+        tr.proposed td {
+            color: var(--accent);
+        }
+
+        tr.proposed td:first-child {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        /* ─── FIGURES ─── */
+        .figures {
+            display: grid;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+
+        .figures.two-col {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .figures.one-col {
+            grid-template-columns: 1fr;
+            max-width: 640px;
+        }
+
+        .fig {
+            border-top: 1px solid var(--border);
+            padding-top: 1rem;
+        }
+
+        .fig img {
+            width: 100%;
+            display: block;
+            border-radius: 2px;
+        }
+
+        .fig-cap {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            margin-top: 0.6rem;
+            letter-spacing: 0.02em;
+        }
+
+        /* ─── FOOTNOTE ─── */
+        .footnote {
+            font-family: 'Epilogue', sans-serif;
+            font-style: italic;
+            font-weight: 300;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 1rem;
+            padding-left: 0;
+        }
+
+        /* ─── TWO COLUMN PIPELINE ─── */
+        .two-col-text {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            margin-top: 1.5rem;
+        }
+
+        .col-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            margin-bottom: 0.6rem;
+        }
+
+        .col-body {
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            line-height: 1.65;
+        }
+
+        /* ─── MEAN ROW ─── */
+        tr.mean-row td {
+            border-top: 1px solid var(--border);
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        /* ─── PRINT ─── */
+        @media print {
+            body {
+                background: #fff;
+                color: #111;
+                background-image: none;
+            }
+            .nav { display: none; }
+            .header-name { color: #006655; }
+            .win, tr.proposed td { color: #006655; }
+            td, th { color: #333; }
+            .section { break-inside: avoid; }
+        }
+
+        /* ─── RESPONSIVE ─── */
+        @media (max-width: 768px) {
+            .header { padding: 48px 1.5rem 40px; }
+            .content { padding: 0 1.5rem; }
+            .nav-inner { padding: 0 1.5rem; }
+            .nav-links { gap: 1rem; flex-wrap: wrap; }
+            .header-tag { position: static; margin-bottom: 1rem; }
+            .two-col-text { grid-template-columns: 1fr; gap: 1.5rem; }
+            .figures.two-col { grid-template-columns: 1fr; }
+            .header h1 { font-size: 1.8rem; }
+            table { font-size: 0.78rem; }
+            th, td { padding: 6px 8px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+    <div class="nav-inner">
+        <ul class="nav-links">
+            <li><a href="#abstract">Abstract</a></li>
+            <li><a href="#pipeline">Pipeline</a></li>
+            <li><a href="#comparison">Results</a></li>
+            <li><a href="#ablation">Ablation</a></li>
+            <li><a href="#crossval">Cross-Val</a></li>
+            <li><a href="#visuals">Figures</a></li>
+            <li><a href="#limitations">Limitations</a></li>
+        </ul>
+    </div>
+</nav>
+
+<!-- HEADER -->
+<header class="header">
+    <div class="header-tag">KOI-2026 / CSE — URCE</div>
+    <div class="header-name">A Mourya Sasank</div>
+    <h1>
+        CNN-Based Feature Learning Combined with Random Forest for Robust Exoplanet Classification
+        <span>Using NASA Kepler Light Curves</span>
+    </h1>
+</header>
+
+<main class="content">
+
+    <!-- 01 ABSTRACT -->
+    <section class="section" id="abstract">
+        <div class="section-head">
+            <span class="section-num">01</span>
+            <h2 class="section-title">Abstract</h2>
+        </div>
+        <p class="prose">
+            A hybrid framework in which a 1D Convolutional Neural Network performs automatic feature learning directly from raw Kepler flux time-series (~3,198 measurements per observation), eliminating manual feature design. Extracted deep representations are transferred to a Random Forest classifier, combining temporal pattern recognition with ensemble robustness and interpretability. SMOTE is applied post train-validation split to address class imbalance without data leakage, evaluated using PR-AUC and F1-Score — metrics chosen for severely imbalanced astronomical classification.
+        </p>
+    </section>
+
+    <!-- 02 PIPELINE -->
+    <section class="section" id="pipeline">
+        <div class="section-head">
+            <span class="section-num">02</span>
+            <h2 class="section-title">Pipeline Overview</h2>
+        </div>
+
+        <div class="pipeline-wrap">
+            <svg width="820" height="80" viewBox="0 0 820 80" xmlns="http://www.w3.org/2000/svg">
+                <!-- Box 1: Kepler Light Curves -->
+                <rect x="0" y="12" width="140" height="52" rx="3" fill="none" stroke="rgba(74,255,219,0.3)" stroke-width="1"/>
+                <text x="70" y="34" text-anchor="middle" class="label-main">Kepler Light Curves</text>
+                <text x="70" y="48" text-anchor="middle" class="label-sub">(~3198 points)</text>
+
+                <!-- Arrow 1 -->
+                <line x1="144" y1="38" x2="172" y2="38" stroke="rgba(74,255,219,0.25)" stroke-width="1"/>
+                <polygon points="172,34 180,38 172,42" fill="rgba(74,255,219,0.25)"/>
+
+                <!-- Box 2: 1D CNN -->
+                <rect x="184" y="12" width="130" height="52" rx="3" fill="none" stroke="rgba(74,255,219,0.3)" stroke-width="1"/>
+                <text x="249" y="34" text-anchor="middle" class="label-main">1D CNN</text>
+                <text x="249" y="48" text-anchor="middle" class="label-sub">Feature Extractor</text>
+
+                <!-- Arrow 2 -->
+                <line x1="318" y1="38" x2="346" y2="38" stroke="rgba(74,255,219,0.25)" stroke-width="1"/>
+                <polygon points="346,34 354,38 346,42" fill="rgba(74,255,219,0.25)"/>
+
+                <!-- Box 3: Deep Features -->
+                <rect x="358" y="12" width="120" height="52" rx="3" fill="none" stroke="rgba(74,255,219,0.3)" stroke-width="1"/>
+                <text x="418" y="34" text-anchor="middle" class="label-main">Deep Features</text>
+                <text x="418" y="48" text-anchor="middle" class="label-sub">(64-dim)</text>
+
+                <!-- Arrow 3 -->
+                <line x1="482" y1="38" x2="510" y2="38" stroke="rgba(74,255,219,0.25)" stroke-width="1"/>
+                <polygon points="510,34 518,38 510,42" fill="rgba(74,255,219,0.25)"/>
+
+                <!-- Box 4: Random Forest -->
+                <rect x="522" y="12" width="140" height="52" rx="3" fill="none" stroke="rgba(74,255,219,0.3)" stroke-width="1"/>
+                <text x="592" y="34" text-anchor="middle" class="label-main">Random Forest</text>
+                <text x="592" y="48" text-anchor="middle" class="label-sub">+ SMOTE</text>
+
+                <!-- Arrow 4 -->
+                <line x1="666" y1="38" x2="694" y2="38" stroke="rgba(74,255,219,0.25)" stroke-width="1"/>
+                <polygon points="694,34 702,38 694,42" fill="rgba(74,255,219,0.25)"/>
+
+                <!-- Box 5: Output -->
+                <rect x="706" y="12" width="110" height="52" rx="3" fill="none" stroke="rgba(74,255,219,0.3)" stroke-width="1"/>
+                <text x="761" y="34" text-anchor="middle" class="label-main">Exoplanet /</text>
+                <text x="761" y="48" text-anchor="middle" class="label-main">Non-Planet</text>
+            </svg>
+        </div>
+
+        <div class="two-col-text">
+            <div>
+                <div class="col-label">CNN Architecture</div>
+                <div class="col-body">
+                    Three 1D convolutional blocks (32→64→128 filters, kernel=5) with batch normalization, ReLU activation, and max pooling. Global average pooling produces a 64-dimensional feature vector per light curve. Dropout (0.4) for regularization. Trained with early stopping on validation loss.
+                </div>
+            </div>
+            <div>
+                <div class="col-label">Random Forest Classifier</div>
+                <div class="col-body">
+                    200-tree ensemble on CNN-extracted features. SMOTE applied post-split to training fold only, preventing data leakage. Threshold optimized on validation PR curve to maximize F1. Feature importances analyzed via permutation importance and SHAP values.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 03 MODEL COMPARISON -->
+    <section class="section" id="comparison">
+        <div class="section-head">
+            <span class="section-num">03</span>
+            <h2 class="section-title">Results: Model Comparison</h2>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Baseline RF</th>
+                    <th>Hybrid CNN+RF</th>
+                    <th>Δ</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Precision</td>
+                    <td>0.2000</td>
+                    <td class="win">0.6000</td>
+                    <td class="delta up">↑ 3×</td>
+                </tr>
+                <tr>
+                    <td>Recall</td>
+                    <td>0.2000</td>
+                    <td class="win">0.6000</td>
+                    <td class="delta up">↑ 3×</td>
+                </tr>
+                <tr>
+                    <td>F1-Score</td>
+                    <td>0.2000</td>
+                    <td class="win">0.6000</td>
+                    <td class="delta up">↑ 3×</td>
+                </tr>
+                <tr>
+                    <td>PR-AUC</td>
+                    <td>0.1011</td>
+                    <td class="win">0.5425</td>
+                    <td class="delta up">↑ 5.4×</td>
+                </tr>
+                <tr>
+                    <td>ROC-AUC</td>
+                    <td class="win">0.9437</td>
+                    <td>0.8782</td>
+                    <td class="delta down">↓ 0.93×</td>
+                </tr>
+                <tr>
+                    <td>MCC</td>
+                    <td>0.1929</td>
+                    <td class="win">0.5965</td>
+                    <td class="delta up">↑ 3.1×</td>
+                </tr>
+                <tr>
+                    <td>Accuracy</td>
+                    <td>0.9860</td>
+                    <td class="win">0.9930</td>
+                    <td class="delta up">↑ 1.0×</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- 04 ABLATION -->
+    <section class="section" id="ablation">
+        <div class="section-head">
+            <span class="section-num">04</span>
+            <h2 class="section-title">Results: Ablation Study</h2>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Variant</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                    <th>PR-AUC</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>CNN-only (no RF)</td>
+                    <td>0.6667</td>
+                    <td>0.4000</td>
+                    <td>0.5000</td>
+                    <td>0.3302</td>
+                </tr>
+                <tr>
+                    <td>PCA(64) + RF (fair baseline)</td>
+                    <td>0.0000</td>
+                    <td>0.0000</td>
+                    <td>0.0000</td>
+                    <td>0.0497</td>
+                </tr>
+                <tr class="proposed">
+                    <td>CNN + RF Hybrid (proposed)</td>
+                    <td>0.6000</td>
+                    <td>0.6000</td>
+                    <td>0.6000</td>
+                    <td>0.5425</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <p class="footnote">
+            Bootstrap 95% CI (1000 resamples, n=5 test positives): Hybrid F1 = 0.60 [0.00, 1.00], PR-AUC = 0.54 [0.02, 1.00], MCC = 0.60 [−0.003, 1.00]. Wide intervals reflect the statistical fragility of 5 test positives.
+        </p>
+    </section>
+
+    <!-- 05 CROSS-VALIDATION -->
+    <section class="section" id="crossval">
+        <div class="section-head">
+            <span class="section-num">05</span>
+            <h2 class="section-title">Cross-Validation Stability</h2>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Fold</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                    <th>PR-AUC</th>
+                    <th>ROC-AUC</th>
+                    <th>MCC</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>0.1818</td>
+                    <td>0.6667</td>
+                    <td>0.2857</td>
+                    <td>0.1028</td>
+                    <td>0.8784</td>
+                    <td>0.3404</td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td>0.1250</td>
+                    <td>0.3333</td>
+                    <td>0.1818</td>
+                    <td>0.0515</td>
+                    <td>0.8457</td>
+                    <td>0.1953</td>
+                </tr>
+                <tr>
+                    <td>3</td>
+                    <td>0.2857</td>
+                    <td>0.8571</td>
+                    <td>0.4286</td>
+                    <td>0.2114</td>
+                    <td>0.9862</td>
+                    <td>0.4888</td>
+                </tr>
+                <tr>
+                    <td>4</td>
+                    <td>0.3750</td>
+                    <td>0.5000</td>
+                    <td>0.4286</td>
+                    <td>0.3591</td>
+                    <td>0.9854</td>
+                    <td>0.4285</td>
+                </tr>
+                <tr>
+                    <td>5</td>
+                    <td>0.5000</td>
+                    <td>0.6667</td>
+                    <td>0.5714</td>
+                    <td>0.5273</td>
+                    <td>0.9839</td>
+                    <td>0.5740</td>
+                </tr>
+                <tr class="mean-row">
+                    <td>Mean ± Std</td>
+                    <td>0.2935 ± 0.15</td>
+                    <td>0.6048 ± 0.20</td>
+                    <td>0.3792 ± 0.15</td>
+                    <td>0.2504 ± 0.19</td>
+                    <td>0.9359 ± 0.07</td>
+                    <td>0.4054 ± 0.15</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- 06 VISUALIZATIONS -->
+    <section class="section" id="visuals">
+        <div class="section-head">
+            <span class="section-num">06</span>
+            <h2 class="section-title">Visualizations</h2>
+        </div>
+
+        <div class="figures two-col">
+            <div class="fig">
+                <img src="confusion_matrix_baseline.png" alt="Baseline RF confusion matrix">
+                <div class="fig-cap">Fig 1 — Confusion matrix: Baseline RF</div>
+            </div>
+            <div class="fig">
+                <img src="confusion_matrix_hybrid.png" alt="Hybrid CNN+RF confusion matrix">
+                <div class="fig-cap">Fig 2 — Confusion matrix: Hybrid CNN+RF</div>
+            </div>
+        </div>
+
+        <div class="figures one-col" style="margin-top: 2.5rem;">
+            <div class="fig">
+                <img src="pr_curve.png" alt="Precision-Recall curve comparing Hybrid vs Baseline">
+                <div class="fig-cap">Fig 3 — Precision-Recall curve. PR-AUC is the preferred metric for imbalanced classification.</div>
+            </div>
+        </div>
+
+        <div class="figures one-col" style="margin-top: 2.5rem;">
+            <div class="fig">
+                <img src="sample_light_curves.png" alt="Sample Kepler light curves showing transit events">
+                <div class="fig-cap">Fig 4 — Sample light curves. Top: confirmed exoplanets (transit dips). Bottom: non-planets.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 07 LIMITATIONS -->
+    <section class="section" id="limitations">
+        <div class="section-head">
+            <span class="section-num">07</span>
+            <h2 class="section-title">Limitations</h2>
+        </div>
+        <p class="prose">
+            The Kepler dataset contains only 37 confirmed exoplanet observations (5 in the test set), making point metrics statistically fragile — bootstrap confidence intervals span nearly the full [0, 1] range. Cross-validation F1 varies from 0.18 to 0.57 across folds, reflecting high sensitivity to which few positives appear in each split. SMOTE-generated synthetic training samples may not capture the full diversity of real transit morphologies. The pipeline has been validated exclusively on Kepler photometry and has not been tested on TESS, K2, or ground-based survey data. These constraints are inherent to the dataset scale, not the architecture, and would be mitigated by a larger confirmed exoplanet pool.
+        </p>
+    </section>
+
+</main>
+
+<!-- Minimal scroll-based nav highlighting -->
+<script>
+    (function() {
+        const sections = document.querySelectorAll('.section[id]');
+        const links = document.querySelectorAll('.nav-links a');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    links.forEach(a => a.classList.remove('active'));
+                    const id = entry.target.id;
+                    const active = document.querySelector('.nav-links a[href="#' + id + '"]');
+                    if (active) active.classList.add('active');
+                }
+            });
+        }, { threshold: 0.3, rootMargin: '-60px 0px -40% 0px' });
+        sections.forEach(s => observer.observe(s));
+    })();
+</script>
+</body>
+</html>

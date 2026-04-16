@@ -31,11 +31,11 @@ FOCAL_GAMMA = 2.0
 CLASS_WEIGHT_CAP = 50.0     # Kept from Run 2 — preserves more imbalance signal
 
 # ─── RANDOM FOREST (HYBRID) ──────────────────────────────────
-# FIX: Reduced from 700/20/2 → 300/12/3 to prevent overfitting
+# Tuned: depth=10 gives expressiveness without SMOTE memorization (depth=12+leaf=1 overfits)
 RF_N_ESTIMATORS = 200
-RF_MAX_DEPTH = 8
-RF_MIN_SAMPLES_LEAF = 3
-RF_MIN_SAMPLES_SPLIT = 5
+RF_MAX_DEPTH = 10
+RF_MIN_SAMPLES_LEAF = 2
+RF_MIN_SAMPLES_SPLIT = 3
 
 # ─── RANDOM FOREST (BASELINE) ────────────────────────────────
 BASELINE_N_ESTIMATORS = 300
@@ -43,17 +43,17 @@ BASELINE_MAX_DEPTH = 20
 BASELINE_MIN_SAMPLES_LEAF = 2
 
 # ─── SMOTE ────────────────────────────────────────────────────
-# FIX: Reverted hybrid from 0.3 → 0.1 — 0.3 caused Run 2 F1 regression
-SMOTE_SAMPLING_STRATEGY = 0.1    # Hybrid only — on CNN features
+# Raised from 0.1 → 0.15 — creates ~645 synthetic positives (safe middle ground, 0.3 caused regression)
+SMOTE_SAMPLING_STRATEGY = 0.15   # Hybrid only — on CNN features
 SMOTE_K_NEIGHBORS = 5
-BASELINE_SMOTE_STRATEGY = 0.3    # Baseline only — on raw flux (kept at 0.3)
+BASELINE_SMOTE_STRATEGY = 0.3    # Baseline only — on raw flux (unchanged)
 
 # ─── THRESHOLD OPTIMIZATION (HYBRID) ─────────────────────────
-# Hybrid threshold search: np.linspace(0.30, 0.60, 40) — restored to Run 1 values
-THRESHOLD_MIN = 0.30             # Hybrid floor — restored from 0.20 to 0.30 (Run 1)
-THRESHOLD_MAX = 0.60
-THRESHOLD_STEPS = 40
-THRESHOLD_FALLBACK = 0.30        # Hybrid fallback — restored from 0.20 to 0.30 (Run 1)
+# Hybrid threshold search: np.linspace(0.08, 0.55, 60) — tuned for isotonic calibration range
+THRESHOLD_MIN = 0.08             # Catches lower isotonic-calibrated probs
+THRESHOLD_MAX = 0.55             # Isotonic probs rarely exceed 0.55 on imbalanced data
+THRESHOLD_STEPS = 60
+THRESHOLD_FALLBACK = 0.15        # Lower fallback for calibrated probabilities
 
 # ─── THRESHOLD OPTIMIZATION (BASELINE) ───────────────────────
 # CRITICAL FIX: Baseline sigmoid probabilities are compressed far below 0.20
@@ -67,7 +67,7 @@ BASELINE_THRESHOLD_FALLBACK = 0.01  # Last-resort fallback — will still predic
 # ─── CROSS-VALIDATION ────────────────────────────────────────
 CV_N_SPLITS = 5
 CV_RF_N_ESTIMATORS = 200
-CV_RF_MAX_DEPTH = 8  # Aligned with RF_MAX_DEPTH for consistent CV evaluation
+CV_RF_MAX_DEPTH = 10  # Must match RF_MAX_DEPTH for honest cross-validation
 
 # ─── PATHS (relative to BASE_DIR) ────────────────────────────
 DATA_SUBDIR = 'data'
